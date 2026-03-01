@@ -88,11 +88,12 @@ class OpenClawClient extends EventEmitter {
         fn();
       };
 
+      // Derive origin from gateway URL — gateway checks Origin header
+      const gwUrl = new URL(this.gatewayUrl.replace(/^ws/, 'http'));
+      const origin = gwUrl.origin;
+
       const ws = new WebSocket(this.gatewayUrl, {
-        headers: {
-          // Gateway origin check: must appear to come from localhost Control UI
-          'Origin': 'http://localhost:3000',
-        },
+        headers: { 'Origin': origin },
       });
       this.ws = ws;
 
