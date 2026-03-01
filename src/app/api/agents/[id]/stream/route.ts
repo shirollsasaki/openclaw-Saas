@@ -1,9 +1,12 @@
 import { NextRequest } from 'next/server';
-import { getOpenClawClient, ChatEvent } from '@/lib/openclaw-ws';
+import { spawn } from 'child_process';
 import { AGENT_MAP } from '@/lib/agents';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const OPENCLAW_BIN = process.env.OPENCLAW_BIN || '/opt/homebrew/bin/openclaw';
+const TIMEOUT_MS = 60_000;
 
 function sseEvent(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
@@ -23,7 +26,13 @@ export async function GET(
     });
   }
 
-  const client = getOpenClawClient();
+  const message = req.nextUrl.searchParams.get('message')?.trim();
+  if (!message) {
+    return new Response(JSON.stringify({ error: 'Missing ?message= query param' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -43,37 +52,82 @@ export async function GET(
         }
       };
 
-      // Send initial status
-      enqueue({
-        type: 'agent_status',
-        agentId: agent.id,
-        status: client.getAgentStatus(agent.sessionKey),
-      });
+      let stdout = '';
+      let stderr = '';
 
-      const onChat = (event: ChatEvent) => {
-        if (event.sessionKey !== agent.sessionKey) return;
+      try {
+        const proc = spawn(OPENCLAW_BIN, [
+          'agent',
+          '--agent', agent.id,
+          '--message', message,
+          '--json',
+        ]);
 
-        if (event.error) {
-          enqueue({ type: 'agent_error', agentId: agent.id, error: event.error });
-          return;
-        }
+        const timer = setTimeout(() => {
+          proc.kill('SIGTERM');
+          enqueue({ type: 'agent_error', agentId: agent.id, error: 'Agent timed out after 60 seconds' });
+          close();
+        }, TIMEOUT_MS);
 
-        if (event.text) {
-          enqueue({ type: 'agent_token', agentId: agent.id, token: event.text });
-        }
+        req.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          proc.kill('SIGTERM');
+          closed = true;
+          controller.close();
+        });
 
-        if (event.done) {
-          enqueue({ type: 'agent_done', agentId: agent.id });
-        }
-      };
+        proc.stdout.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString();
+        });
 
-      client.on('chat', onChat);
+        proc.stderr.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString();
+        });
 
-      // Clean up on client disconnect
-      req.signal.addEventListener('abort', () => {
-        client.off('chat', onChat);
+        proc.on('error', (err: Error) => {
+          clearTimeout(timer);
+          enqueue({ type: 'agent_error', agentId: agent.id, error: `Failed to spawn openclaw: ${err.message}` });
+          close();
+        });
+
+        proc.on('close', (code: number | null) => {
+          clearTimeout(timer);
+          if (closed) return;
+
+          if (code !== 0) {
+            enqueue({ type: 'agent_error', agentId: agent.id, error: `openclaw exited with code ${code}: ${stderr}` });
+            close();
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(stdout);
+            const text: string = parsed?.result?.payloads?.[0]?.text ?? '';
+
+            if (text) {
+              const tokens = text.split(/(\s+)/);
+              for (const token of tokens) {
+                if (token) {
+                  enqueue({ type: 'agent_token', agentId: agent.id, token });
+                }
+              }
+            }
+
+            enqueue({ type: 'agent_done', agentId: agent.id });
+          } catch {
+            enqueue({ type: 'agent_error', agentId: agent.id, error: 'Failed to parse openclaw response' });
+          }
+
+          close();
+        });
+      } catch (err) {
+        enqueue({
+          type: 'agent_error',
+          agentId: agent.id,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
         close();
-      });
+      }
     },
   });
 

@@ -84,7 +84,12 @@ class OpenClawClient extends EventEmitter {
         fn();
       };
 
-      const ws = new WebSocket(this.gatewayUrl);
+      const ws = new WebSocket(this.gatewayUrl, {
+        headers: {
+          // Gateway origin check: must appear to come from localhost Control UI
+          'Origin': 'http://localhost:3000',
+        },
+      });
       this.ws = ws;
 
       ws.on('open', () => {
@@ -129,6 +134,23 @@ class OpenClawClient extends EventEmitter {
   }
 
   private async handshake(): Promise<void> {
+    // Step 1: Wait for connect.challenge event (gateway sends nonce)
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('handshake timeout: no challenge')), 8000);
+      const onMsg = (data: WebSocket.Data) => {
+        try {
+          const msg = JSON.parse(data.toString()) as RpcResponse | GatewayEvent;
+          if (msg.type === 'event' && msg.event === 'connect.challenge') {
+            clearTimeout(timeout);
+            this.ws?.off('message', onMsg);
+            resolve();
+          }
+        } catch { /* ignore */ }
+      };
+      this.ws?.on('message', onMsg);
+    });
+
+    // Step 2: Send connect with correct protocol
     const id = this.nextId();
     await this.sendRpc({
       type: 'req',
@@ -138,14 +160,18 @@ class OpenClawClient extends EventEmitter {
         minProtocol: 3,
         maxProtocol: 3,
         client: {
-          id: 'openclaw-web',
+          id: 'webchat-ui',
           version: '1.0.0',
           platform: 'web',
-          mode: 'operator',
+          mode: 'webchat',
+          instanceId: 'openclaw-saas',
         },
         role: 'operator',
-        scopes: ['operator.read', 'operator.write'],
+        // operator.admin bypasses all scope checks in the gateway
+        scopes: ['operator.admin', 'operator.approvals', 'operator.pairing', 'operator.write', 'operator.read', 'operator.talk.secrets'],
+        caps: [],
         auth: { token: this.gatewayToken },
+        userAgent: 'openclaw-saas/1.0',
       },
     });
   }

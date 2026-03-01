@@ -2,6 +2,7 @@ import BioCanvas from '@/components/BioCanvas';
 import CursorFollower from '@/components/CursorFollower';
 import ChatPanel from '@/components/ChatPanel';
 import AgentSidePanel from '@/components/AgentSidePanel';
+import SessionsSidebar from '@/components/SessionsSidebar';
 
 export default function ChatPage() {
   return (
@@ -17,6 +18,7 @@ export default function ChatPage() {
 
       {/* Chat UI */}
       <main className="relative z-[3] flex h-screen w-full overflow-hidden">
+        <SessionsSidebar />
         <div className="flex flex-1 flex-col min-w-0">
           <ChatPanel />
         </div>

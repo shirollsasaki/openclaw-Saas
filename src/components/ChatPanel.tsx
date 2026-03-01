@@ -2,12 +2,14 @@
 import { useRef, useEffect, useState, FormEvent } from 'react';
 import ChatMessage from './ChatMessage';
 import { useChat } from '@/store';
+import { useSessions } from '@/store';
 
 export default function ChatPanel() {
   const {
     messages, isStreaming, streamingContent, error,
     addUserMessage, startStreaming, appendToken, finishStreaming, setError,
   } = useChat();
+  const { toggleSidebar } = useSessions();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -68,6 +70,14 @@ export default function ChatPanel() {
     <div className="flex flex-col h-full bg-transparent">
       {/* Header */}
       <div className="flex items-center px-8 py-5 border-b border-[#111]">
+        <button
+          onClick={toggleSidebar}
+          className="text-[#444] hover:text-[#666] text-xs mr-4 transition-colors duration-200 leading-none"
+          style={{ fontFamily: 'var(--font-mono, monospace)' }}
+          title="Toggle sessions sidebar"
+        >
+          ☰
+        </button>
         <span
           className="text-[#444] text-xs uppercase tracking-widest"
           style={{ fontFamily: 'var(--font-mono, monospace)' }}
