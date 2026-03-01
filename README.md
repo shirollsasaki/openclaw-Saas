@@ -2,6 +2,10 @@
 
 A GPT-like web interface for the OpenClaw 7-agent AI team. Type natural language prompts and watch Richard, Monica, Gilfoyle, Dinesh, Erlich, Jared, and Big Head work in real-time.
 
+## Live Demo
+
+**🚀 [https://openclaw-saas-hazel.vercel.app](https://openclaw-saas-hazel.vercel.app)**
+
 ## The Team
 
 | Agent | Role |
