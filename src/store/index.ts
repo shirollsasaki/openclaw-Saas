@@ -1,25 +1,20 @@
 'use client';
 
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { useShallow } from 'zustand/shallow';
 import { createChatSlice, ChatSlice } from './chatSlice';
 import { createAgentPanelSlice, AgentPanelSlice } from './agentPanelSlice';
 
 export type AppStore = ChatSlice & AgentPanelSlice;
 
-export const useAppStore = create<AppStore>()(
-  devtools(
-    (...a) => ({
-      ...createChatSlice(...a),
-      ...createAgentPanelSlice(...a),
-    }),
-    { name: 'OpenClawStore' }
-  )
-);
+export const useAppStore = create<AppStore>()((...a) => ({
+  ...createChatSlice(...a),
+  ...createAgentPanelSlice(...a),
+}));
 
-// Typed selector hooks
+// Typed selector hooks — useShallow prevents infinite re-renders from object literal selectors
 export const useChat = () =>
-  useAppStore((s) => ({
+  useAppStore(useShallow((s) => ({
     messages: s.messages,
     isStreaming: s.isStreaming,
     streamingContent: s.streamingContent,
@@ -30,10 +25,10 @@ export const useChat = () =>
     finishStreaming: s.finishStreaming,
     setError: s.setError,
     clearMessages: s.clearMessages,
-  }));
+  })));
 
 export const useAgentPanel = () =>
-  useAppStore((s) => ({
+  useAppStore(useShallow((s) => ({
     agents: s.agents,
     setAgentStatus: s.setAgentStatus,
     appendAgentToken: s.appendAgentToken,
@@ -41,6 +36,6 @@ export const useAgentPanel = () =>
     setAgentError: s.setAgentError,
     toggleAgentExpanded: s.toggleAgentExpanded,
     resetAllAgents: s.resetAllAgents,
-  }));
+  })));
 
 export const useAgent = (id: string) => useAppStore((s) => s.agents[id]);

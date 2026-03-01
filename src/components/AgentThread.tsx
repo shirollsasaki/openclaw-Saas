@@ -11,21 +11,24 @@ export default function AgentThread({ agentState }: AgentThreadProps) {
 
   if (!hasContent) {
     return (
-      <div className="px-3 py-3 text-xs text-gray-600 italic">
-        {status === 'offline' ? 'Agent offline' : 'Waiting for tasks...'}
+      <div
+        className="px-5 py-3 text-[0.65rem] text-[#2a2a2a] uppercase tracking-wider"
+        style={{ fontFamily: 'var(--font-mono, monospace)' }}
+      >
+        {status === 'offline' ? 'OFFLINE' : 'STANDBY'}
       </div>
     );
   }
 
   return (
-    <div className="px-3 py-2 max-h-48 overflow-y-auto space-y-2">
+    <div className="px-5 py-3 max-h-40 overflow-y-auto space-y-2">
       {messages.map((msg) => (
-        <div key={msg.id} className="text-xs text-gray-300 leading-relaxed">{msg.content}</div>
+        <div key={msg.id} className="text-xs text-[#555] leading-relaxed font-light">{msg.content}</div>
       ))}
       {streamingContent && (
-        <div className="text-xs text-gray-300 leading-relaxed">
+        <div className="text-xs text-[#555] leading-relaxed font-light">
           {streamingContent}
-          <span className="inline-block w-1 h-3 bg-gray-400 ml-0.5 animate-pulse rounded-sm" />
+          <span className="inline-block w-px h-3 bg-[#444] ml-0.5 animate-pulse" />
         </div>
       )}
     </div>

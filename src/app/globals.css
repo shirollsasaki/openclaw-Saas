@@ -3,19 +3,43 @@
 @tailwind utilities;
 
 :root {
-  --background: #0f0f0f;
-  --foreground: #ededed;
+  --background: #030303;
+  --foreground: #6a6a6a;
+  --highlight: #e0e0e0;
 }
+
 body {
-  background: #0f0f0f;
-  color: #ededed;
+  background: #030303;
+  color: #6a6a6a;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
-::-webkit-scrollbar { width: 6px; }
+
+/* Hide cursor on pointer devices — custom cursor follower takes over */
+@media (pointer: fine) {
+  body { cursor: none; }
+  a, button, input, textarea, [role="button"] { cursor: none; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+
+/* Noise overlay helper */
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+/* Pulsing status dot */
+@keyframes status-pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+.status-pulse {
+  animation: status-pulse 4s infinite;
+}
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  .text-balance { text-wrap: balance; }
 }
