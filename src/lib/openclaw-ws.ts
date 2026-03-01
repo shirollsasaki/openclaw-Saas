@@ -200,7 +200,7 @@ class OpenClawClient extends EventEmitter {
       const fullText = p.message?.content?.[0]?.text ?? p.text ?? '';
       const isDone = p.state === 'final' || p.done === true;
       const prev = this.lastText.get(sessionKey) ?? '';
-      const delta = fullText.length > prev.length ? fullText.slice(prev.length) : fullText;
+      const delta = fullText.length > prev.length ? fullText.slice(prev.length) : '';
       if (fullText) this.lastText.set(sessionKey, fullText);
       if (isDone) this.lastText.delete(sessionKey);
       if (isDone) this.agentStatuses.set(sessionKey, 'idle');

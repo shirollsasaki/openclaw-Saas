@@ -2,7 +2,6 @@
 import { AgentConfig } from '@/lib/agents';
 import { AgentState, AgentStatus } from '@/store/agentPanelSlice';
 import AgentThread from './AgentThread';
-import { useAgentStream } from '@/hooks/useAgentStream';
 
 function StatusDot({ status }: { status: AgentStatus }) {
   const color =
@@ -23,7 +22,6 @@ interface AgentCardProps {
 export default function AgentCard({ agent, agentState, onToggle }: AgentCardProps) {
   const { status, isExpanded } = agentState;
 
-  useAgentStream(agent.id, isExpanded);
 
   return (
     <div className="border-b border-[#111]">

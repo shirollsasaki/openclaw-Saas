@@ -87,9 +87,8 @@ export async function POST(req: NextRequest) {
         try {
           await client.connect();
         } catch (connectErr) {
-          const msg = connectErr instanceof Error ? connectErr.message : String(connectErr);
           console.error('[ws-connect]', connectErr);
-          enqueue({ type: 'error', message: `Gateway connect error: ${msg}` });
+          enqueue({ type: 'error', message: 'Unable to reach agent gateway' });
           finish();
           return;
         }
@@ -106,11 +105,10 @@ export async function POST(req: NextRequest) {
         try {
           await client.sendMessage(sessionKey, message);
         } catch (sendErr) {
-          const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
           console.error('[ws-send]', sendErr);
           enqueue({
             type: 'error',
-            message: `Agent connection error: ${errMsg}`,
+            message: 'Failed to send message to agent',
           });
           finish();
         }

@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useEffect, useState, FormEvent } from 'react';
 import ChatMessage from './ChatMessage';
-import { useChat } from '@/store';
+import { useChat, useAgentPanel } from '@/store';
 import { useSessions } from '@/store';
 
 export default function ChatPanel() {
@@ -9,6 +9,7 @@ export default function ChatPanel() {
     messages, isStreaming, streamingContent, error,
     addUserMessage, startStreaming, appendToken, finishStreaming, setError,
   } = useChat();
+  const { setAgentStatus, appendAgentToken, finishAgentStream } = useAgentPanel();
   const { toggleSidebar } = useSessions();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -51,6 +52,9 @@ export default function ChatPanel() {
           try {
             const event = JSON.parse(line.slice(6));
             if (event.type === 'chat_token') appendToken(event.token ?? '');
+            else if (event.type === 'agent_started') setAgentStatus(event.agentId, 'thinking');
+            else if (event.type === 'agent_token') appendAgentToken(event.agentId, event.token ?? '');
+            else if (event.type === 'agent_done') finishAgentStream(event.agentId);
             else if (event.type === 'done') finishStreaming();
             else if (event.type === 'error') setError(event.message ?? 'Agent error');
           } catch { /* ignore */ }
