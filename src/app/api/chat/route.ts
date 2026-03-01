@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
           agentName: primaryAgent.name,
         });
 
-        await client.connect().catch(() => {});
+        await client.connect().catch((e: unknown) => { console.error('[ws-connect]', e); });
 
         client.on('chat', onChat);
         timeout = setTimeout(finish, 5 * 60 * 1000);
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
 
         try {
           await client.sendMessage(sessionKey, message);
-        } catch {
+        } catch (sendErr) { console.error('[ws-send]', sendErr);
           enqueue({
             type: 'error',
             message: client.isConnected()
