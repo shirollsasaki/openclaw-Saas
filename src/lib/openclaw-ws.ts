@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
+import crypto from 'crypto';
 
 // ─── JSON-RPC Protocol Types ──────────────────────────────────────────────────
 
@@ -27,6 +28,8 @@ interface GatewayEvent {
     text?: string;
     done?: boolean;
     error?: string;
+    state?: 'delta' | 'final';
+    message?: { role: string; content: Array<{ type: string; text: string }>; timestamp?: number };
   };
 }
 
@@ -57,6 +60,7 @@ class OpenClawClient extends EventEmitter {
   private readonly maxReconnectDelay = 30000;
   private agentStatuses = new Map<string, AgentStatus>();
   private msgCounter = 0;
+  private lastText = new Map<string, string>();
 
   private get gatewayUrl(): string {
     return process.env.OPENCLAW_GATEWAY_URL ?? 'ws://127.0.0.1:18789';
@@ -160,10 +164,10 @@ class OpenClawClient extends EventEmitter {
         minProtocol: 3,
         maxProtocol: 3,
         client: {
-          id: 'webchat-ui',
+          id: 'openclaw-control-ui',
           version: '1.0.0',
           platform: 'web',
-          mode: 'webchat',
+          mode: 'ui',
           instanceId: 'openclaw-saas',
         },
         role: 'operator',
@@ -192,25 +196,16 @@ class OpenClawClient extends EventEmitter {
     } else if (msg.type === 'event' && msg.event === 'chat') {
       const p = msg.payload;
       const sessionKey = p.sessionKey ?? '';
-
-      // Update agent status
-      if (p.done) {
-        this.agentStatuses.set(sessionKey, 'idle');
-      } else if (p.error) {
-        this.agentStatuses.set(sessionKey, 'error');
-      } else if (p.text) {
-        this.agentStatuses.set(sessionKey, 'responding');
-      }
-
-      const chatEvent: ChatEvent = {
-        runId: p.runId ?? '',
-        sessionKey,
-        text: p.text ?? '',
-        done: p.done ?? false,
-        error: p.error,
-      };
-
-      // Emit on both specific and wildcard channels
+      const fullText = p.message?.content?.[0]?.text ?? p.text ?? '';
+      const isDone = p.state === 'final' || p.done === true;
+      const prev = this.lastText.get(sessionKey) ?? '';
+      const delta = fullText.length > prev.length ? fullText.slice(prev.length) : fullText;
+      if (fullText) this.lastText.set(sessionKey, fullText);
+      if (isDone) this.lastText.delete(sessionKey);
+      if (isDone) this.agentStatuses.set(sessionKey, 'idle');
+      else if (p.error) this.agentStatuses.set(sessionKey, 'error');
+      else if (delta) this.agentStatuses.set(sessionKey, 'responding');
+      const chatEvent: ChatEvent = { runId: p.runId ?? '', sessionKey, text: delta, done: isDone, error: p.error };
       this.emit(`chat:${sessionKey}`, chatEvent);
       this.emit('chat', chatEvent);
     }
@@ -250,7 +245,7 @@ class OpenClawClient extends EventEmitter {
       type: 'req',
       id,
       method: 'chat.send',
-      params: { sessionKey, text },
+      params: { sessionKey, message: text, idempotencyKey: crypto.randomUUID() },
     });
     return result as { runId: string };
   }

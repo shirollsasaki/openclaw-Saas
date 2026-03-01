@@ -1,12 +1,9 @@
 import { NextRequest } from 'next/server';
-import { spawn } from 'child_process';
+import { getOpenClawClient, ChatEvent } from '@/lib/openclaw-ws';
 import { AGENT_MAP } from '@/lib/agents';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const OPENCLAW_BIN = process.env.OPENCLAW_BIN || '/opt/homebrew/bin/openclaw';
-const TIMEOUT_MS = 60_000;
 
 function sseEvent(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
@@ -34,10 +31,16 @@ export async function GET(
     });
   }
 
+  const sessionKey = `agent:${agent.sessionKey}:main`;
+  const client = getOpenClawClient();
+
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
       let closed = false;
+      let timer: NodeJS.Timeout;
+      // eslint-disable-next-line prefer-const
+      let onChat: (event: ChatEvent) => void;
 
       const enqueue = (data: object) => {
         if (!closed) {
@@ -45,81 +48,62 @@ export async function GET(
         }
       };
 
+      const cleanup = () => {
+        clearTimeout(timer);
+        client.off('chat', onChat);
+      };
+
       const close = () => {
         if (!closed) {
           closed = true;
+          cleanup();
           controller.close();
         }
       };
 
-      let stdout = '';
-      let stderr = '';
+      onChat = (event: ChatEvent) => {
+        if (event.sessionKey !== sessionKey) return;
+
+        if (event.error) {
+          enqueue({ type: 'agent_error', agentId: agent.id, error: event.error });
+          close();
+          return;
+        }
+
+        if (event.text) {
+          enqueue({ type: 'agent_token', agentId: agent.id, token: event.text });
+        }
+
+        if (event.done) {
+          enqueue({ type: 'agent_done', agentId: agent.id });
+          close();
+        }
+      };
 
       try {
-        const proc = spawn(OPENCLAW_BIN, [
-          'agent',
-          '--agent', agent.id,
-          '--message', message,
-          '--json',
-        ]);
+        await client.connect().catch(() => {});
 
-        const timer = setTimeout(() => {
-          proc.kill('SIGTERM');
-          enqueue({ type: 'agent_error', agentId: agent.id, error: 'Agent timed out after 60 seconds' });
-          close();
-        }, TIMEOUT_MS);
+        client.on('chat', onChat);
+        timer = setTimeout(close, 5 * 60 * 1000);
 
         req.signal.addEventListener('abort', () => {
-          clearTimeout(timer);
-          proc.kill('SIGTERM');
           closed = true;
+          cleanup();
           controller.close();
         });
 
-        proc.stdout.on('data', (chunk: Buffer) => {
-          stdout += chunk.toString();
-        });
-
-        proc.stderr.on('data', (chunk: Buffer) => {
-          stderr += chunk.toString();
-        });
-
-        proc.on('error', (err: Error) => {
-          clearTimeout(timer);
-          enqueue({ type: 'agent_error', agentId: agent.id, error: `Failed to spawn openclaw: ${err.message}` });
+        try {
+          await client.sendMessage(sessionKey, message);
+        } catch {
+          enqueue({
+            type: 'agent_error',
+            agentId: agent.id,
+            error: client.isConnected()
+              ? 'Failed to send message to agent'
+              : 'OpenClaw gateway is offline',
+          });
           close();
-        });
-
-        proc.on('close', (code: number | null) => {
-          clearTimeout(timer);
-          if (closed) return;
-
-          if (code !== 0) {
-            enqueue({ type: 'agent_error', agentId: agent.id, error: `openclaw exited with code ${code}: ${stderr}` });
-            close();
-            return;
-          }
-
-          try {
-            const parsed = JSON.parse(stdout);
-            const text: string = parsed?.result?.payloads?.[0]?.text ?? '';
-
-            if (text) {
-              const tokens = text.split(/(\s+)/);
-              for (const token of tokens) {
-                if (token) {
-                  enqueue({ type: 'agent_token', agentId: agent.id, token });
-                }
-              }
-            }
-
-            enqueue({ type: 'agent_done', agentId: agent.id });
-          } catch {
-            enqueue({ type: 'agent_error', agentId: agent.id, error: 'Failed to parse openclaw response' });
-          }
-
-          close();
-        });
+        }
       } catch (err) {
         enqueue({
           type: 'agent_error',
