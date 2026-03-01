@@ -84,7 +84,15 @@ export async function POST(req: NextRequest) {
           agentName: primaryAgent.name,
         });
 
-        await client.connect().catch((e: unknown) => { console.error('[ws-connect]', e); });
+        try {
+          await client.connect();
+        } catch (connectErr) {
+          const msg = connectErr instanceof Error ? connectErr.message : String(connectErr);
+          console.error('[ws-connect]', connectErr);
+          enqueue({ type: 'error', message: `Gateway connect error: ${msg}` });
+          finish();
+          return;
+        }
 
         client.on('chat', onChat);
         timeout = setTimeout(finish, 5 * 60 * 1000);
@@ -97,12 +105,12 @@ export async function POST(req: NextRequest) {
 
         try {
           await client.sendMessage(sessionKey, message);
-        } catch (sendErr) { console.error('[ws-send]', sendErr);
+        } catch (sendErr) {
+          const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+          console.error('[ws-send]', sendErr);
           enqueue({
             type: 'error',
-            message: client.isConnected()
-              ? 'Failed to send message to agent'
-              : 'OpenClaw gateway is offline. Please ensure the gateway is running.',
+            message: `Agent connection error: ${errMsg}`,
           });
           finish();
         }
