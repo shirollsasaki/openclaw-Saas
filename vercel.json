@@ -3,5 +3,11 @@
     "src/app/api/**": {
       "maxDuration": 300
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/folio/:path*",
+      "destination": "https://folio-afterapp.vercel.app/folio/:path*"
+    }
+  ]
 }
